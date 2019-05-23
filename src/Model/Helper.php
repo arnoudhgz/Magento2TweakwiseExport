@@ -19,6 +19,13 @@ use SplFileInfo;
 class Helper
 {
     /**
+     * Apparently some of magento core attributes are marked as static
+     * but their values are not saved in table catalog_product_entity
+     * we cannot export these attributes.
+     */
+    const ATTRIBUTE_BLACKLIST = ['category_ids'];
+
+    /**
      * @var ProductMetadataInterface
      */
     private $productMetadata;
@@ -67,7 +74,7 @@ class Helper
      */
     public function getStoreId(int $id): int
     {
-        return (int) substr($id, 5);
+        return (int)substr($id, 5);
     }
 
     /**
@@ -76,19 +83,29 @@ class Helper
      */
     public function shouldExportAttribute(Attribute $attribute)
     {
-        if (
-            !$attribute->getUsedInProductListing() &&
-            !$attribute->getIsFilterable() &&
-            !$attribute->getIsFilterableInSearch() &&
-            !$attribute->getIsFilterableInGrid() &&
-            !$attribute->getIsSearchable() &&
-            !$attribute->getIsVisibleInAdvancedSearch() &&
-            !$attribute->getUsedForSortBy()
-        ) {
-            return false;
-        }
+        $isBlackListed = $this->isAttributeBlacklisted($attribute);
+        return !$isBlackListed &&
+            (
+                $attribute->getUsedInProductListing() ||
+                $attribute->getIsFilterable() ||
+                $attribute->getIsFilterableInSearch() ||
+                $attribute->getIsSearchable() ||
+                $attribute->getIsVisibleInAdvancedSearch() ||
+                $attribute->getUsedForSortBy()
+            );
+    }
 
-        return true;
+    /**
+     * @param Attribute $attribute
+     * @return bool
+     */
+    protected function isAttributeBlacklisted(Attribute $attribute)
+    {
+        return \in_array(
+            $attribute->getAttributeCode(),
+            self::ATTRIBUTE_BLACKLIST,
+            true
+        );
     }
 
     /**
@@ -136,12 +153,14 @@ class Helper
     {
         $startDate = $this->getFeedExportStartDate();
         if (!$this->config->isRealTime() && $startDate) {
-            return sprintf(__('Running, started on %s.'), $this->localDate->formatDate($startDate, IntlDateFormatter::MEDIUM, true));
+            return sprintf(__('Running, started on %s.'),
+                $this->localDate->formatDate($startDate, IntlDateFormatter::MEDIUM, true));
         }
 
         $finishedDate = $this->getLastFeedExportDate();
         if ($finishedDate) {
-            return sprintf(__('Finished on %s.'), $this->localDate->formatDate($finishedDate, IntlDateFormatter::MEDIUM, true));
+            return sprintf(__('Finished on %s.'),
+                $this->localDate->formatDate($finishedDate, IntlDateFormatter::MEDIUM, true));
         }
 
         return __('Export never triggered.');
